@@ -26,23 +26,24 @@ if st.button("Generate Report"):
         if data.empty:
             st.error("No data found for the given ticker and date range.")
         elif 'Volume' not in data.columns or 'Close' not in data.columns:
-            st.error("Missing required data columns in the fetched data.")
+            st.error("Missing required data columns (Volume, Close). Analysis cannot proceed.")
         else:
             # Fill missing values in key columns
             data['Volume'] = data['Volume'].fillna(0)
             data['Close'] = data['Close'].fillna(method='ffill')
             data['Adj Close'] = data['Adj Close'].fillna(method='ffill')
 
+
             # Calculate rolling average and daily change
             data['20DayAvgVol'] = data['Volume'].rolling(20).mean()
             data['DailyChangePct'] = (data['Close'].pct_change()) * 100
 
-            # Debugging: Display the DataFrame to verify the structure
-            st.write("### Debugging Data:")
-            st.write(data.head(25))
+            # Drop rows with NaN values resulting from the rolling average calculation
+            data.dropna(inplace=True)
 
-            # Ensure NaN values are removed
-            data = data.dropna(subset=['20DayAvgVol', 'Close'])
+            # Debugging: Display the DataFrame to verify the structure
+            st.write("### Debugging Data (First 25 Rows):")
+            st.write(data.head(25))
 
             # Identify Breakout Days
             breakout_days = data[(data['Volume'] > (volume_threshold / 100) * data['20DayAvgVol']) &
