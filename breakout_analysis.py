@@ -28,15 +28,24 @@ if st.button("Generate Report"):
         elif 'Volume' not in data.columns or 'Close' not in data.columns:
             st.error("Missing required data columns in the fetched data.")
         else:
+            # Calculate rolling average and daily change
             data['20DayAvgVol'] = data['Volume'].rolling(20).mean()
             data['DailyChangePct'] = (data['Close'].pct_change()) * 100
 
-            # Drop rows with NaN values in '20DayAvgVol'
-            data = data.dropna(subset=['20DayAvgVol'])
+            # Debugging: Display the DataFrame to verify the structure
+            st.write("### Debugging Data:")
+            st.write(data.head(25))
+
+            # Ensure NaN values are removed
+            data = data.dropna(subset=['20DayAvgVol', 'Volume'])
 
             # Identify Breakout Days
             breakout_days = data[(data['Volume'] > (volume_threshold / 100) * data['20DayAvgVol']) &
                                  (data['DailyChangePct'] > price_change_threshold)]
+
+            # Debugging: Display breakout days DataFrame
+            st.write("### Debugging Breakout Days:")
+            st.write(breakout_days)
 
             # Calculate Holding Period Returns
             results = []
