@@ -24,6 +24,9 @@ if st.button("Generate Report"):
         data['20DayAvgVol'] = data['Volume'].rolling(20).mean()
         data['DailyChangePct'] = (data['Close'].pct_change()) * 100
 
+        # Drop rows with NaN values in '20DayAvgVol'
+        data = data.dropna(subset=['20DayAvgVol'])
+
         # Identify Breakout Days
         breakout_days = data[(data['Volume'] > (volume_threshold / 100) * data['20DayAvgVol']) &
                              (data['DailyChangePct'] > price_change_threshold)]
