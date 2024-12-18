@@ -28,6 +28,9 @@ if st.button("Generate Report"):
         elif 'Volume' not in data.columns or 'Close' not in data.columns:
             st.error("Missing required data columns in the fetched data.")
         else:
+            # Fill missing values in Volume with 0 (safety step)
+            data['Volume'] = data['Volume'].fillna(0)
+
             # Calculate rolling average and daily change
             data['20DayAvgVol'] = data['Volume'].rolling(20).mean()
             data['DailyChangePct'] = (data['Close'].pct_change()) * 100
@@ -37,7 +40,7 @@ if st.button("Generate Report"):
             st.write(data.head(25))
 
             # Ensure NaN values are removed
-            data = data.dropna(subset=['20DayAvgVol', 'Volume'])
+            data = data.dropna(subset=['20DayAvgVol', 'Close'])
 
             # Identify Breakout Days
             breakout_days = data[(data['Volume'] > (volume_threshold / 100) * data['20DayAvgVol']) &
