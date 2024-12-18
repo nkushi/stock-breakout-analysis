@@ -28,8 +28,10 @@ if st.button("Generate Report"):
         elif 'Volume' not in data.columns or 'Close' not in data.columns:
             st.error("Missing required data columns in the fetched data.")
         else:
-            # Fill missing values in Volume with 0 (safety step)
+            # Fill missing values in key columns
             data['Volume'] = data['Volume'].fillna(0)
+            data['Close'] = data['Close'].fillna(method='ffill')
+            data['Adj Close'] = data['Adj Close'].fillna(method='ffill')
 
             # Calculate rolling average and daily change
             data['20DayAvgVol'] = data['Volume'].rolling(20).mean()
