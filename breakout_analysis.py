@@ -34,12 +34,20 @@ if st.button("Generate Report"):
             data['20DayAvgVol'] = data['Volume'].rolling(20).mean()
             data['DailyChangePct'] = (data['Close'].pct_change()) * 100
 
+            # Debugging: Display the DataFrame to verify the structure
+            st.write("### Debugging Data:")
+            st.write(data.head(25))
+
             # Remove rows with NaN values after calculations
             data = data.dropna(subset=['20DayAvgVol', 'DailyChangePct'])
 
             # Identify Breakout Days
             breakout_days = data[(data['Volume'] > (volume_threshold / 100) * data['20DayAvgVol']) &
                                  (data['DailyChangePct'] > price_change_threshold)]
+
+            # Debugging: Display breakout days DataFrame
+            st.write("### Debugging Breakout Days:")
+            st.write(breakout_days)
 
             # Calculate Holding Period Returns
             results = []
