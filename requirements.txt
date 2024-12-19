@@ -1,3 +1,4 @@
-alpha_vantage
+yfinance
 pandas
 streamlit
+alpha_vantage
