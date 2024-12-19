@@ -21,17 +21,20 @@ class StockBreakoutAnalyzer:
 
                 if data.empty:
                     st.error("No data found for the given ticker and date range.")
-                    return  # Stop execution if no data
+                    return
                 elif 'Volume' not in data.columns or 'Close' not in data.columns:
                     st.error("Missing required data (Volume, Close).")
                     return
 
                 data['Volume'] = data['Volume'].fillna(0)
-                data['Close'] = data['Close'].fillna(method='ffill')
-                data['Adj Close'] = data['Adj Close'].fillna(method='ffill')
-                data['20DayAvgVol'] = data['Volume'].rolling(20).mean()
+                data['Close'] = data['Close'].ffill()
+                data['Adj Close'] = data['Adj Close'].ffill()
+
+                # Key change: Reset index after rolling average
+                data['20DayAvgVol'] = data['Volume'].rolling(20).mean().reset_index(drop=True)
                 data['DailyChangePct'] = data['Close'].pct_change() * 100
-                data.dropna(inplace=True)  # Crucial: Drop NaN AFTER rolling calc
+
+                data.dropna(inplace=True)  # Drop NaN after calculations
 
                 breakout_days = data[
                     (data['Volume'] > (self.volume_threshold / 100) * data['20DayAvgVol']) &
@@ -54,7 +57,7 @@ class StockBreakoutAnalyzer:
                                 'Sell Price': round(sell_price, 2),
                                 'Return (%)': round(return_pct, 2)
                             })
-                        except KeyError:
+                        except KeyError:  # Handle cases where sell_date is not a trading day
                             pass
                     else:
                         st.warning(f"Breakout on {date.strftime('%Y-%m-%d')} cannot be fully evaluated due to insufficient data for the holding period.")
@@ -71,8 +74,6 @@ class StockBreakoutAnalyzer:
             except Exception as e:
                 st.error(f"Error: {e}")
 
-
-# Run the app
 if __name__ == "__main__":
     analyzer = StockBreakoutAnalyzer()
     analyzer.analyze()
