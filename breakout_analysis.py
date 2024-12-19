@@ -1,79 +1,95 @@
-import yfinance as yf
 import pandas as pd
 import streamlit as st
 from datetime import timedelta
+from alpha_vantage.timeseries import TimeSeries
 
-class StockBreakoutAnalyzer:
-    def __init__(self):
-        st.title("Stock Breakout Strategy Backtester")
-        self.ticker = st.text_input("Stock Ticker (e.g., AAPL)", "AAPL")
-        self.start_date = st.date_input("Start Date")
-        self.end_date = st.date_input("End Date")
-        self.volume_threshold = st.number_input("Volume Breakout Threshold (%)", min_value=100, value=200)
-        self.price_change_threshold = st.number_input("Daily Price Change Threshold (%)", min_value=1, value=2)
-        self.holding_period = st.number_input("Holding Period (Days)", min_value=1, value=10)
+# Streamlit UI Setup
+st.title("Stock Breakout Analysis Tool")
 
-    def analyze(self):
-        if st.button("Generate Report"):
-            st.write("Fetching Data...")
-            try:
-                data = yf.download(self.ticker, start=self.start_date, end=self.end_date)
+# User Inputs
+ticker = st.text_input("Stock Ticker (e.g., AAPL)", "AAPL")
+start_date = st.date_input("Start Date")
+end_date = st.date_input("End Date")
+volume_threshold = st.number_input("Volume Breakout Threshold (%)", min_value=100, value=200)
+price_change_threshold = st.number_input("Daily Price Change Threshold (%)", min_value=1, value=2)
+holding_period = st.number_input("Holding Period (Days)", min_value=1, value=10)
 
-                if data.empty:
-                    st.error("No data found for the given ticker and date range.")
-                    return
-                elif 'Volume' not in data.columns or 'Close' not in data.columns:
-                    st.error("Missing required data (Volume, Close).")
-                    return
+# Alpha Vantage API Key
+ALPHA_VANTAGE_API_KEY = "BE7C6KBZ0N3U5C3M"
+ts = TimeSeries(key=ALPHA_VANTAGE_API_KEY, output_format='pandas')
 
-                data['Volume'] = data['Volume'].fillna(0)
-                data['Close'] = data['Close'].ffill()
-                data['Adj Close'] = data['Adj Close'].ffill()
+# Generate Report Button
+if st.button("Generate Report"):
+    st.write("Fetching Data...")
 
-                # Key change: Reset index after rolling average
-                data['20DayAvgVol'] = data['Volume'].rolling(20).mean().reset_index(drop=True)
-                data['DailyChangePct'] = data['Close'].pct_change() * 100
+    try:
+        # Fetch Historical Data from Alpha Vantage
+        data, _ = ts.get_daily(symbol=ticker, outputsize='full')
+        data = data.rename(columns={
+            '1. open': 'Open',
+            '2. high': 'High',
+            '3. low': 'Low',
+            '4. close': 'Close',
+            '5. volume': 'Volume'
+        })
+        data.index = pd.to_datetime(data.index)
 
-                data.dropna(inplace=True)  # Drop NaN after calculations
+        # Filter data within the selected date range
+        data = data[(data.index >= pd.to_datetime(start_date)) & (data.index <= pd.to_datetime(end_date))]
 
-                breakout_days = data[
-                    (data['Volume'] > (self.volume_threshold / 100) * data['20DayAvgVol']) &
-                    (data['DailyChangePct'] > self.price_change_threshold)
-                ]
+        # Validate data
+        if data.empty:
+            st.error("No data found for the given ticker and date range.")
+        else:
+            # Fill missing values in key columns
+            data['Volume'] = data['Volume'].fillna(0)
+            data['Close'] = data['Close'].fillna(method='ffill')
 
-                results = []
-                for date in breakout_days.index:
-                    buy_price = data.loc[date, 'Close']
-                    sell_date = date + timedelta(days=self.holding_period)
+            # Calculate rolling average and daily change
+            data['20DayAvgVol'] = data['Volume'].rolling(20).mean()
+            data['DailyChangePct'] = (data['Close'].pct_change()) * 100
 
-                    if sell_date < data.index[-1]:
-                        try:
-                            sell_price = data.loc[sell_date, 'Close']
-                            return_pct = ((sell_price - buy_price) / buy_price) * 100
-                            results.append({
-                                'Breakout Date': date,
-                                'Buy Price': round(buy_price, 2),
-                                'Sell Date': sell_date,
-                                'Sell Price': round(sell_price, 2),
-                                'Return (%)': round(return_pct, 2)
-                            })
-                        except KeyError:  # Handle cases where sell_date is not a trading day
-                            pass
-                    else:
-                        st.warning(f"Breakout on {date.strftime('%Y-%m-%d')} cannot be fully evaluated due to insufficient data for the holding period.")
+            # Debugging: Display the DataFrame to verify the structure
+            st.write("### Debugging Data:")
+            st.write(data.head(25))
 
-                if results:
-                    results_df = pd.DataFrame(results)
-                    st.write("### Breakout Analysis Results")
-                    st.dataframe(results_df)
-                    csv = results_df.to_csv(index=False).encode('utf-8')
-                    st.download_button("Download Report as CSV", csv, f"{self.ticker}_breakout_analysis.csv", "text/csv")
-                else:
-                    st.write("No breakout days found based on the criteria.")
+            # Ensure NaN values are removed
+            data = data.dropna(subset=['20DayAvgVol', 'Close'])
 
-            except Exception as e:
-                st.error(f"Error: {e}")
+            # Identify Breakout Days
+            breakout_days = data[(data['Volume'] > (volume_threshold / 100) * data['20DayAvgVol']) &
+                                 (data['DailyChangePct'] > price_change_threshold)]
 
-if __name__ == "__main__":
-    analyzer = StockBreakoutAnalyzer()
-    analyzer.analyze()
+            # Debugging: Display breakout days DataFrame
+            st.write("### Debugging Breakout Days:")
+            st.write(breakout_days)
+
+            # Calculate Holding Period Returns
+            results = []
+            for date in breakout_days.index:
+                buy_price = data.loc[date, 'Close']
+                sell_date = date + timedelta(days=holding_period)
+                if sell_date in data.index:
+                    sell_price = data.loc[sell_date, 'Close']
+                    return_pct = ((sell_price - buy_price) / buy_price) * 100
+                    results.append({
+                        'Breakout Date': date,
+                        'Buy Price': round(buy_price, 2),
+                        'Sell Date': sell_date,
+                        'Sell Price': round(sell_price, 2),
+                        'Return (%)': round(return_pct, 2)
+                    })
+
+            # Display Results
+            if results:
+                results_df = pd.DataFrame(results)
+                st.write("### Breakout Analysis Results")
+                st.dataframe(results_df)
+
+                # Downloadable CSV
+                csv = results_df.to_csv(index=False).encode('utf-8')
+                st.download_button("Download Report as CSV", csv, f"{ticker}_breakout_analysis.csv", "text/csv")
+            else:
+                st.write("No breakout days found based on the criteria.")
+    except Exception as e:
+        st.error(f"Error fetching data: {e}")
